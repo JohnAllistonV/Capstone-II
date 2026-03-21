@@ -1,2 +1,2 @@
 # Capstone-II
-Ligma
+This is the github code base for Capstone II
