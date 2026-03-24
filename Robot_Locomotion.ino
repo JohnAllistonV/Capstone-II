@@ -18,22 +18,22 @@
  * ── Pin Map ───────────────────────────────────────────────────────────────────
  *
  *   D0, D1  — reserved for Serial (do not use)
- *   D2      — IN2 FR    (FR reverse)
+ *   D2      — IN4 FR    (FR reverse)
  *   D3      — PWM FL    (hardware PWM)
  *   D4      — Encoder FL – A (faulty, monitoring only)
  *   D5      — PWM FR    (hardware PWM)
  *   D6      — PWM BL    (hardware PWM)
- *   D7      — IN1 BL    (BL forward)
+ *   D7      — IN4 BL    (BL forward)
  *   D8      — Encoder BL – A (monitoring only)
  *   D9      — PWM BR    (hardware PWM)
  *   D10     — Encoder FR – A (monitoring only)
- *   D11     — IN2 BL    (BL reverse)
- *   D12     — IN1 BR    (BR forward)
- *   D13     — IN2 BR    (BR reverse)
+ *   D11     — IN3 BL    (BL reverse)
+ *   D12     — IN2 BR    (BR forward)
+ *   D13     — IN1 BR    (BR reverse)
  *   A0      — Encoder BR – A (monitoring only)
  *   A1      — IN1 FL    (FL forward)
  *   A2      — IN2 FL    (FL reverse)
- *   A3      — IN1 FR    (FR forward)
+ *   A3      — IN3 FR    (FR forward)
  *   A4      — IMU SDA   (MPU-6050)
  *   A5      — IMU SCL   (MPU-6050)
  *
@@ -118,10 +118,10 @@ const int DRIVE_PWM = 150;
 // To calibrate: set all headingKp/Ki/Kd to 0, run the robot, and adjust
 // individual factors until it drives straight. Then re-enable heading PID.
 // Example: if FR is running too fast, reduce CAL_FR from 1.00 to 0.95.
-float CAL_FL = 0.85; // 118.0 RPM at 1.00 - no load
-float CAL_FR = 1.20; // 110.7 RPM at 1.00 - no load
-float CAL_BL = 1.00; // 105.3 RPM at 1.00 - no load
-float CAL_BR = 1.20; // 118.7 RPM at 1.00 - no load
+float CAL_FL = 0.80; //
+float CAL_FR = 1.00; //
+float CAL_BL = 1.20; //
+float CAL_BR = 0.85; // 
 
 
 // ── IMU update rate ───────────────────────────────────────────────────────────
@@ -156,7 +156,7 @@ unsigned long brakeStart[4]     = {0, 0, 0, 0};
 //  ENCODER STATE (BL and BR — monitoring only)
 // ════════════════════════════════════════════════════════════════════════════
 
-volatile long encFL = 0;  // FL encoder faulty — will always read 0
+volatile long encFL = 0;
 volatile long encFR = 0;
 volatile long encBL = 0;
 volatile long encBR = 0;
@@ -333,7 +333,7 @@ void printData(long snapFL, long snapFR, long snapBL, long snapBR) {
   Serial.print(F("Motors | Left PWM: "));    Serial.print(_lastLeftPWM);
   Serial.print(F("  | Right PWM: "));        Serial.println(_lastRightPWM);
   Serial.print(F("FL     | RPM: "));         Serial.print(rpmFL, 1);
-  Serial.print(F(" (faulty)  | Dist: "));    Serial.print(distFL, 3); Serial.println(F(" m"));
+  Serial.print(F("  | Dist: "));    Serial.print(distFL, 3); Serial.println(F(" m"));
   Serial.print(F("FR     | RPM: "));         Serial.print(rpmFR, 1);
   Serial.print(F("  | Dist: "));             Serial.print(distFR, 3); Serial.println(F(" m"));
   Serial.print(F("BL     | RPM: "));         Serial.print(rpmBL, 1);
@@ -370,10 +370,11 @@ void setup() {
   lastIMUTime = millis();
 
   // Encoder pins (monitoring only)
-  pinMode(ENC_FL, INPUT_PULLUP);  // FL faulty — pin set up but ISR not attached
+  pinMode(ENC_FL, INPUT_PULLUP);
   pinMode(ENC_FR, INPUT_PULLUP);
   pinMode(ENC_BL, INPUT_PULLUP);
   pinMode(ENC_BR, INPUT_PULLUP);
+  attachPCINT(digitalPinToPCINT(ENC_FL), ISR_FL, RISING);
   attachPCINT(digitalPinToPCINT(ENC_FR), ISR_FR, RISING);
   attachPCINT(digitalPinToPCINT(ENC_BL), ISR_BL, RISING);
   attachPCINT(digitalPinToPCINT(ENC_BR), ISR_BR, RISING);
@@ -418,7 +419,7 @@ void loop() {
 
   // ── Motion sequence ───────────────────────────────────────────────────────
   unsigned long elapsed = now - sequenceStart;
-  if (elapsed < 5500) {
+  if (elapsed < 5000) {
     driveAll(DRIVE_PWM);
   } else {
     stopAll();
@@ -448,7 +449,7 @@ void loop() {
   }
 
   // ── Serial report (stops 1 second after motors stop) ────────────────────
-  if (elapsed < 6500 && now - lastReportTime >= REPORT_INTERVAL_MS) {
+  if (elapsed < 6000 && now - lastReportTime >= REPORT_INTERVAL_MS) {
     float dt = REPORT_INTERVAL_MS / 1000.0;
 
     // Snapshot all encoder counts atomically
