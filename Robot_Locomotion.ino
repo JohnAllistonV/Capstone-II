@@ -128,9 +128,9 @@ bool applyCalFactors = true;
 const unsigned long IMU_INTERVAL_MS     = 10;
 const unsigned long HEADING_INTERVAL_MS = 50;
 
-float headingKp = 8.0;
-float headingKi = 0.03;
-float headingKd = 0.01;
+float headingKp = 5.0;    // was 25 — much lower, Kp no longer needs to fight Ki
+float headingKi = 0.20;   // was 1.50 — lower, integral now has Kp helping it
+float headingKd = 0.00;   // keep zero
 
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -270,8 +270,8 @@ void setSides(int leftPWM, int rightPWM) {
   _lastRightPWM = rightPWM;
   setFR(rightPWM);
   setFL(leftPWM);
-  setBL(leftPWM);
   setBR(rightPWM);
+  setBL(leftPWM);
 }
 
 void driveAll(int pwm) {
@@ -410,6 +410,8 @@ void printData(long snapFL, long snapFR, long snapBL, long snapBR) {
 
 void setup() {
   Serial.begin(115200);
+  Serial.println(F("")); // Print gap to easily distinguish run start
+  Serial.println(F(""));
   Serial.println(F("=== Differential Drive Robot + IMU Heading Correction ==="));
 
   Wire.begin();
@@ -486,9 +488,9 @@ void loop() {
     float dt_h         = HEADING_INTERVAL_MS / 1000.0;
     float headingError = targetHeading - totalAngleZ;
 
-    if (abs(headingError) > 1.0) {
+    if (abs(headingError) > 0.3) {
       headingIntegral += headingError * dt_h;
-      headingIntegral  = constrain(headingIntegral, -30.0 / (headingKi + 0.001), 30.0 / (headingKi + 0.001));
+      headingIntegral = constrain(headingIntegral, -20.0 / (headingKi + 0.001), 20.0 / (headingKi + 0.001));
 
       float headingDerivative = -gyroZ;
       float headingCorrection = (headingKp * headingError)
@@ -496,11 +498,11 @@ void loop() {
                               + (headingKd * headingDerivative);
       headingCorrection = constrain(headingCorrection, -50.0, 50.0);
 
-      int leftPWM  = constrain(DRIVE_PWM - (int)headingCorrection, 0, 255);
-      int rightPWM = constrain(DRIVE_PWM + (int)headingCorrection, 0, 255);
+      int leftPWM  = constrain(DRIVE_PWM + (int)headingCorrection, 0, 255);
+      int rightPWM = constrain(DRIVE_PWM - (int)headingCorrection, 0, 255);
       setSides(leftPWM, rightPWM);
     } else {
-      headingIntegral *= 0.95;
+      headingIntegral *= 0.99; //Very slow bleed to preserve integral in the deadband
       setSides(DRIVE_PWM, DRIVE_PWM);
     }
   }
