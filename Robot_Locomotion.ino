@@ -128,8 +128,8 @@ bool applyCalFactors = true;
 const unsigned long IMU_INTERVAL_MS     = 10;
 const unsigned long HEADING_INTERVAL_MS = 50;
 
-float headingKp = 8.0;
-float headingKi = 0.03;
+float headingKp = 20.0;
+float headingKi = 0.4;
 float headingKd = 0.01;
 
 
@@ -486,7 +486,7 @@ void loop() {
     float dt_h         = HEADING_INTERVAL_MS / 1000.0;
     float headingError = targetHeading - totalAngleZ;
 
-    if (abs(headingError) > 1.0) {
+    if (abs(headingError) > 0.2) {
       headingIntegral += headingError * dt_h;
       headingIntegral  = constrain(headingIntegral, -30.0 / (headingKi + 0.001), 30.0 / (headingKi + 0.001));
 
