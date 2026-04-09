@@ -48,6 +48,7 @@
  *   IN3  → A3  (FR forward)                IN3  → D12 (BR forward)
  *   IN4  → D2  (FR reverse)                IN4  → D13 (BR reverse)
  *
+ *
  *   MPU-6050
  *   VCC → 3.3V or 5V
  *   GND → GND
@@ -101,7 +102,7 @@ const unsigned long DIRECTION_CHANGE_DELAY_MS = 80;
 const unsigned long REPORT_INTERVAL_MS        = 200;
 
 const int   PULSES_PER_REV      = 225;
-const float WHEEL_DIAMETER_M    = 0.0762;
+const float WHEEL_DIAMETER_M    = 0.08; // was 0.0762
 const float WHEEL_CIRCUMFERENCE = PI * WHEEL_DIAMETER_M;
 
 const float ENC_CAL_FL = 1.000;
@@ -469,13 +470,15 @@ void loop() {
   unsigned long elapsed = now - sequenceStart;
   if (elapsed < 5000) {
     driveAll(DRIVE_PWM);
-  } else if (elapsed == 5000 || (elapsed > 5000 && elapsed < 5100)) {
-    static bool turned = false;
-    if (!turned) {
-      turned = true;
-      turnToHeading(90.0, 80, 1.0, 3000);
-    }
-  } else {
+  } 
+  // else if (elapsed == 5000 || (elapsed > 5000 && elapsed < 5100)) {
+  //   static bool turned = false;
+  //   if (!turned) {
+  //     turned = true;
+  //     turnToHeading(90.0, 80, 1, 3000);
+  //   }
+  // } 
+  else {
     stopAll();
   }
 
