@@ -189,6 +189,8 @@ void pollIMU() {
 //  MOVEMENT API
 // ════════════════════════════════════════════════════════════════════════════
 
+
+
 void goStraight(unsigned long durationMs) {
   applyCalFactors       = true;
   targetHeading         = totalAngleZ;
@@ -200,6 +202,14 @@ void goStraight(unsigned long durationMs) {
   unsigned long startMs = millis();
 
   while (millis() - startMs < durationMs) {
+    if(readSerial()){
+      if(cmdBuffer == "STOP"){
+        cmdBuffer = "";
+        stopRobot();
+        return;
+      }
+      cmdBuffer = "";
+    }
     unsigned long now = millis();
     pollIMU();
     updateBrakes();
@@ -300,6 +310,22 @@ bool parseParam(const String& cmd, const String& prefix, float& value) {
   value = numStr.toFloat();
   return true;
 }
+
+bool readSerial() {
+  while (Serial.available()) {
+    char c = (char)Serial.read();
+    if (c == '\n' || c == '\r') {
+      cmdBuffer.trim();
+      if (cmdBuffer.length() > 0) return true;  // line ready
+    } else {
+      cmdBuffer += c;
+    }
+  }
+  return false;
+}
+
+
+ 
 
 // Executes one token. Returns false on error (sequence should abort).
 bool executeSingle(const String& cmd) {
@@ -425,16 +451,8 @@ void loop() {
   pollIMU();
   updateBrakes();
 
-  while (Serial.available()) {
-    char c = (char)Serial.read();
-    if (c == '\n' || c == '\r') {
-      cmdBuffer.trim();
-      if (cmdBuffer.length() > 0) {
-        handleCommand(cmdBuffer);
-        cmdBuffer = "";
-      }
-    } else {
-      cmdBuffer += c;
-    }
+  if (readSerial()){
+    handleCommand(cmdBuffer);
+    cmdBuffer = "";
   }
 }
