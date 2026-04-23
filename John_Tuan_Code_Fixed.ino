@@ -16,7 +16,8 @@
 // =============================================
 //  JOHN — PIN DEFINITIONS
 // =============================================
-#define BASE_PIN        2    // was 3
+#define BUTTON_PIN      A3
+#define BASE_PIN        2    // was 2
 #define SHOULDER_PIN    3    // was 2
 #define ELBOW_PIN       4    // unchanged
 
@@ -27,7 +28,7 @@
 // ── Servo Angle Limits ────────────────────────
 #define BASE_MIN        0
 #define BASE_MAX        180
-#define SHOULDER_MIN    55
+#define SHOULDER_MIN    0
 #define SHOULDER_MAX    180
 #define ELBOW_MIN       0
 #define ELBOW_MAX       180
@@ -43,8 +44,8 @@ enum State {
   IDLE,
   MOVING_POSITION,
   MOVING_SHOULDER,
-  CLAW_CLOSING,
-  CLAW_OPENING
+  GASP,
+  OPEN
 };
 
 State currentState = IDLE;
@@ -54,10 +55,15 @@ Servo baseServo;
 Servo shoulderServo;
 Servo elbowServo;
 
+// ── Button Initialization ─────────────────────────
+bool lastButtonState = HIGH;  // Unpressed state with pullup
+bool running         = false; // Tracks START/STOP toggle state
+int count = 0;                // Counter for Pushbutton
+
 // ── Position Tracking ─────────────────────────
 int currentBase     = 90;
 int currentShoulder = 90;
-int currentElbow    = 90;
+int currentElbow    = 60;
 
 int targetBase      = 90;
 int targetShoulder  = 90;
@@ -98,7 +104,7 @@ const float MARGIN       = 0.08;
 const int SERVO_CENTER   = 105;
 const int SERVO_RIGHT    = 35;
 const int SERVO_LEFT     = 162;
-const int SERVO_LGOAL    = 150;
+const int SERVO_LGOAL    = 180;
 const int SERVO_RGOAL    = 10;
 const int SERVO_LSTART   = 115;
 const int SERVO_RSTART   = 95;
@@ -113,6 +119,9 @@ int  pendingServoTarget        = SERVO_CENTER;
 // =============================================
 void setup() {
   Serial.begin(115200);
+
+  // ── Emergency Stop ──────────────────────────
+  pinMode(BUTTON_PIN, INPUT_PULLUP);
 
   // ── John's Setup ──────────────────────────
   baseServo.attach(BASE_PIN);
@@ -157,8 +166,59 @@ void setup() {
 // =============================================
 void loop() {
 
-  // ── FIX 2: Single unified serial reader ───
+  // ─Single unified serial reader ───
   readSerial();
+  bool currentButtonState = digitalRead(BUTTON_PIN);
+  //--------------------------------------------------------------------- PUSHBUTTON TEST CODE----------------------------------------------------------------------------------
+
+if (lastButtonState == HIGH && currentButtonState == LOW) {
+  count++;
+
+  if (count % 2 == 1) {
+    Serial.println("Doors Open");
+    Serial.println("Motors OFF");
+    motorOn = false;
+
+    digitalWrite(RAMP_IN1, LOW);
+    digitalWrite(RAMP_IN2, LOW);
+
+    rightDoor.write(SERVO_RGOAL);
+    leftDoor.write(SERVO_LGOAL);
+    delay(5000);
+    rightDoor.write(SERVO_RSTART);
+    leftDoor.write(SERVO_LSTART);
+  } 
+  else {
+    Serial.println("Motors ON");
+    motorOn = true;
+
+    digitalWrite(RAMP_IN1, HIGH);
+    digitalWrite(RAMP_IN2, LOW);
+    analogWrite(ENA, 106);
+  }
+
+  delay(200); // simple debounce
+}
+
+lastButtonState = currentButtonState;
+
+  // ── Emergency Stop ──────────────────
+  //bool currentButtonState = digitalRead(BUTTON_PIN);
+
+  // Detect falling edge (HIGH -> LOW = button pressed) -------------------------------------Actual E Stop Code---------------------------------------------
+  // if (lastButtonState == HIGH && currentButtonState == LOW) {
+  //   delay(50);  // Debounce
+
+  //   running = !running;  // Toggle state
+
+  //   if (running) {
+  //     Serial.println("START");
+  //   } else {
+  //     Serial.println("STOP");
+  //   }
+  // }
+
+  // lastButtonState = currentButtonState;
 
   // ── John's State Machine ──────────────────
   switch (currentState) {
@@ -193,7 +253,7 @@ void loop() {
       }
       break;
 
-    case CLAW_CLOSING:
+    case GASP:
       if (millis() - clawStartTime >= CLAW_TIMEOUT_MS) {
         stopClaw();
         currentState = IDLE;
@@ -201,7 +261,7 @@ void loop() {
       }
       break;
 
-    case CLAW_OPENING:
+    case OPEN:
       if (millis() - clawStartTime >= CLAW_TIMEOUT_MS) {
         stopClaw();
         currentState = IDLE;
@@ -211,6 +271,10 @@ void loop() {
   }
 
   // ── Tuan's Color Scanning ─────────────────
+  // Only scan when arm is idle — prevents color sensor
+  // reads from slowing down servo movement
+  if (currentState != IDLE) return;
+
   uint32_t rSum = 0, gSum = 0, bSum = 0, cSum = 0;
 
   for (int i = 0; i < 2; i++) {
@@ -230,10 +294,10 @@ void loop() {
   float green = (float)gAvg / cAvg;
   float blue  = (float)bAvg / cAvg;
 
-  Serial.print("R: "); Serial.print(rAvg);
-  Serial.print(" G: "); Serial.print(gAvg);
-  Serial.print(" B: "); Serial.print(bAvg);
-  Serial.print(" C: "); Serial.println(cAvg);
+  // Serial.print("R: "); Serial.print(rAvg);
+  // Serial.print(" G: "); Serial.print(gAvg);
+  // Serial.print(" B: "); Serial.print(bAvg);
+  // Serial.print(" C: "); Serial.println(cAvg);
 
   // ── FIX 3: Non-blocking color sort ────────
   // Instead of delay(1000) blocking everything,
@@ -291,7 +355,7 @@ void readSerial() {
       motorOn = true;
       digitalWrite(RAMP_IN1, HIGH);
       digitalWrite(RAMP_IN2, LOW);
-      analogWrite(ENA, 106);
+      analogWrite(ENA, 106); //                                      RAMP 106
       return;
     }
     else if (c == 'S') {
@@ -333,22 +397,22 @@ void parseArmCommand(String cmd) {
       sendStatus("ERROR_BAD_ARGS");
     }
 
-  } else if (cmd == "CLAW CLOSE") {
+  } else if (cmd == "GASP") {
     closeClaw();
     clawStartTime = millis();
-    currentState  = CLAW_CLOSING;
+    currentState  = GASP;
     sendStatus("CLAW_CLOSING");
 
-  } else if (cmd == "CLAW OPEN") {
+  } else if (cmd == "OPEN") {
     openClaw();
     clawStartTime = millis();
-    currentState  = CLAW_OPENING;
+    currentState  = OPEN;
     sendStatus("CLAW_OPENING");
 
   } else if (cmd == "HOME") {
     targetBase     = 90;
     targetShoulder = 90;
-    targetElbow    = 90;
+    targetElbow    = 60;
     currentState   = MOVING_POSITION;
     sendStatus("MOVING");
 
